@@ -1,6 +1,6 @@
 //
 //  SceneDelegate.swift
-//  lab0
+//  final-proj
 //
 //  Created by Eric Liu on 2/5/25.
 //

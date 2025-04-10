@@ -1,6 +1,7 @@
+//  lab0
 //
 //  AppDelegate.swift
-//  lab0
+//  final-proj
 //
 //  Created by Eric Liu on 2/5/25.
 //
@@ -10,8 +11,7 @@ import UIKit
 @main
 class AppDelegate: UIResponder, UIApplicationDelegate {
 
-
-
+    
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
         // Override point for customization after application launch.
         return true
