@@ -1,4 +1,3 @@
-//  lab0
 //
 //  ViewController.swift
 //  final-proj
@@ -19,7 +18,7 @@ class ViewController: UIViewController {
     }
 
     @IBAction func startRecording(_ sender: Any) {
-        recording.generateTone(frequency: 440, duration: 1.0)
+        recording.generateTone(startFrequency: 440, endFrequency: 880, duration: 5.0)
         recording.start()
     }
     
