@@ -1,7 +1,6 @@
-//  lab0
 //
 //  AppDelegate.swift
-//  final-proj
+//  final-project
 //
 //  Created by Eric Liu on 2/5/25.
 //
