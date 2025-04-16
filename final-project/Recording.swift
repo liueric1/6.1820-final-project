@@ -7,6 +7,7 @@
 
 import UIKit
 import AVFoundation
+import Accelerate
 
 class Recording: NSObject {
     private var audioEngine: AVAudioEngine!
@@ -19,8 +20,15 @@ class Recording: NSObject {
     private var lastPeakAmplitude: Float = 0
     private var startFrequency: Float = 0
     private var endFrequency: Float = 0
-    private var sweepDuration: Double = 0
+    private var chirpDuration: Double = 0
     private var sweepStartTime: TimeInterval = 0
+    
+    private var txSignal: [Float] = []
+    private var rxSignal: [Float] = []
+    
+    // params for Bandpass filter
+    private var freqLow: Float = 100.0
+    private var freqHigh: Float = 20000.0
     
     override init() {
         super.init()
@@ -52,31 +60,38 @@ class Recording: NSObject {
         self.audioEngine.connect(mixerNode, to: audioEngine.mainMixerNode, format: format)
     }
     
-    func generateTone(startFrequency: Float, endFrequency: Float, duration: Double) {
+    func generateTone(startFrequency: Float, endFrequency: Float, chirp_duration: Double, total_duration: Double) {
         self.startFrequency = startFrequency
         self.endFrequency = endFrequency
-        self.sweepDuration = duration
+        self.chirpDuration = chirp_duration
         self.sweepStartTime = CACurrentMediaTime()
         
-        let frameCount = AVAudioFrameCount(duration * sampleRate)
-        let format = AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: channelCount)!
+        let chirpFrameCount = Int(chirp_duration * sampleRate)
+        let repeatCount = Int(total_duration / chirp_duration)
+        let totalFrameCount = AVAudioFrameCount(chirpFrameCount * repeatCount)
         
-        let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameCount)!
-        buffer.frameLength = frameCount
+        let format = AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: channelCount)!
+        let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: totalFrameCount)!
+        buffer.frameLength = totalFrameCount
         
         let data = buffer.floatChannelData?[0]
-        for frame in 0..<Int(frameCount) {
-            let time = Double(frame) / sampleRate
-            // Calculate the current frequency using linear interpolation
-            let currentFrequency = startFrequency + (endFrequency - startFrequency) * Float(time / duration)
-            // Calculate the phase using the integral of frequency over time
-            let phase = 2.0 * .pi * Double(currentFrequency) * time
-            data?[frame] = Float(sin(phase))
+        
+        for repeatIndex in 0..<repeatCount {
+            for frame in 0..<chirpFrameCount {
+                let globalFrameIndex = repeatIndex * chirpFrameCount + frame
+                let time = Double(frame) / sampleRate
+                let currentFrequency = startFrequency + (endFrequency - startFrequency) * Float(time / chirp_duration)
+                let phase = 2.0 * .pi * Double(currentFrequency) * time
+                let sampleValue = Float(sin(phase))
+                data?[globalFrameIndex] = sampleValue
+                txSignal.append(sampleValue)
+            }
         }
         
-        playerNode.scheduleBuffer(buffer, at: nil, options: .loops)
-        print("FMCW tone generated from \(startFrequency)Hz to \(endFrequency)Hz")
+        playerNode.scheduleBuffer(buffer, at: nil, options: [])
+        print("FMCW tone generated from \(startFrequency)Hz to \(endFrequency)Hz, repeated for \(total_duration)s")
     }
+
     
     func start() {
         do {
@@ -90,12 +105,28 @@ class Recording: NSObject {
         }
     }
     
+    func processCollectedData() -> (tx: [[Float]], rx: [[Float]])? {
+        return reshapeChirps()
+    }
+    
     func stop() {
         stopMonitoring()
         playerNode.stop()
         audioEngine.stop()
         isRecording = false
         print("Audio engine stopped and monitoring ended")
+        
+        if let processedData = processCollectedData() {
+                print("Processing complete. Received \(processedData.rx.count) chirps")
+            } else {
+                print("Failed to process data")
+            }
+    }
+    
+    func reset() {
+        txSignal = []
+        rxSignal = []
+        isRecording = false
     }
     
     private func startMonitoring() {
@@ -104,12 +135,85 @@ class Recording: NSObject {
         mixerNode.installTap(onBus: 0, bufferSize: 1024, format: format) { buffer, time in
             // Analyze the incoming audio buffer
             self.analyzeReflectedSound(buffer: buffer, time: time)
+            self.storeReceivedAudio(buffer: buffer)
         }
     }
     
     private func stopMonitoring() {
         mixerNode.removeTap(onBus: 0)
     }
+    
+    private func storeReceivedAudio(buffer: AVAudioPCMBuffer) {
+            guard let channelData = buffer.floatChannelData?[0] else { return }
+            let frameLength = Int(buffer.frameLength)
+            
+            let newSamples = Array(UnsafeBufferPointer(start: channelData, count: frameLength))
+            rxSignal.append(contentsOf: newSamples)
+        }
+    
+    //******************** SIGNAL PROCESSING ********************//
+
+    private func reshapeChirps() ->  (tx: [[Float]], rx: [[Float]])? {
+        guard !rxSignal.isEmpty && !txSignal.isEmpty else {
+            print("No data recorded to process")
+            return nil
+        }
+        
+        print("Processing radar data...")
+        
+        let rx = rxSignal
+        let tx = txSignal
+        
+        let chirpLength = chirpDuration
+        
+        let numChirpsRecorded = Int(rx.count / (Int(chirpLength * sampleRate)))
+        print("Number of chirps recorded: \(numChirpsRecorded)")
+        
+        // Trim audio to a whole number of chirps
+        let trimmedLength = Int(Double(numChirpsRecorded) * chirpLength * sampleRate)
+        let rxSig = Array(rx.prefix(min(trimmedLength, rx.count)))
+        
+        // Split received signal into individual chirps
+        let chirpSampleCount = Int(chirpLength * sampleRate)
+        var rxData: [[Float]] = []
+        
+        for i in 0..<numChirpsRecorded {
+            let startIdx = i * chirpSampleCount
+            let endIdx = min(startIdx + chirpSampleCount, rxSig.count)
+            if endIdx - startIdx == chirpSampleCount {
+                rxData.append(Array(rxSig[startIdx..<endIdx]))
+            }
+        }
+        
+        // Create matching transmitted data
+        let txChirp = Array(tx.prefix(min(chirpSampleCount, tx.count)))
+        var txData: [[Float]] = []
+        
+        for _ in 0..<rxData.count {
+            txData.append(txChirp)
+        }
+        
+        let timeToDrop = 1.0
+        let segmentsToDrop = Int(timeToDrop / chirpLength)
+        
+        if segmentsToDrop < rxData.count {
+            rxData = Array(rxData[segmentsToDrop...])
+            txData = Array(txData[segmentsToDrop...])
+        }
+        
+        guard !rxData.isEmpty else {
+            print("Not enough data after dropping segments")
+            return nil
+        }
+    
+        let sample_tx = rxData[0]
+        let sample_rx = txData[0]
+        print("sample_tx: \(sample_tx)")
+        print("sample_rx: \(sample_rx)")
+    
+        return (tx: txData, rx: rxData)
+    }
+    
     
     private func analyzeReflectedSound(buffer: AVAudioPCMBuffer, time: AVAudioTime) {
         guard let channelData = buffer.floatChannelData?[0] else { return }
@@ -125,8 +229,8 @@ class Recording: NSObject {
         if maxAmplitude > 0.01 {
             // Calculate the expected frequency at this time in the sweep
             let elapsedTime = CACurrentMediaTime() - sweepStartTime
-            let sweepPosition = elapsedTime.truncatingRemainder(dividingBy: sweepDuration)
-            let expectedFrequency = startFrequency + (endFrequency - startFrequency) * Float(sweepPosition / sweepDuration)
+            let sweepPosition = elapsedTime.truncatingRemainder(dividingBy: chirpDuration)
+            let expectedFrequency = startFrequency + (endFrequency - startFrequency) * Float(sweepPosition / chirpDuration)
             
             // Use autocorrelation to detect frequency
             var sum: Float = 0
