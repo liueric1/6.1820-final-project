@@ -6,6 +6,7 @@
 //
 
 import UIKit
+import Foundation
 import AVFoundation
 import Accelerate
 
@@ -169,11 +170,11 @@ class Recording: NSObject {
         let numChirpsRecorded = Int(rx.count / (Int(chirpLength * sampleRate)))
         print("Number of chirps recorded: \(numChirpsRecorded)")
         
-        // Trim audio to a whole number of chirps
+        // trim audio to a whole number of chirps
         let trimmedLength = Int(Double(numChirpsRecorded) * chirpLength * sampleRate)
         let rxSig = Array(rx.prefix(min(trimmedLength, rx.count)))
         
-        // Split received signal into individual chirps
+        // split received signal into individual chirps
         let chirpSampleCount = Int(chirpLength * sampleRate)
         var rxData: [[Float]] = []
         
@@ -185,7 +186,7 @@ class Recording: NSObject {
             }
         }
         
-        // Create matching transmitted data
+        // create matching transmitted data
         let txChirp = Array(tx.prefix(min(chirpSampleCount, tx.count)))
         var txData: [[Float]] = []
         
@@ -206,14 +207,50 @@ class Recording: NSObject {
             return nil
         }
     
-        let sample_tx = rxData[0]
-        let sample_rx = txData[0]
-        print("sample_tx: \(sample_tx)")
-        print("sample_rx: \(sample_rx)")
-    
+    // FOR TESTING
+    //        let sample_tx = rxData[0]
+    //        let sample_rx = txData[0]
+    //        print("sample_tx: \(sample_tx)")
+    //        print("sample_rx: \(sample_rx)")
+        
         return (tx: txData, rx: rxData)
     }
     
+    /// Process signal data by multiplying, filtering, and computing FFT
+    /// - Parameters:
+    ///   - rxData: Receive data array
+    ///   - txData: Transmit data array
+    ///   - sampleRate: Sampling frequency in Hz
+    ///   - lowpassCutoff: Cutoff frequency for low-pass filter in Hz (default is 5000)
+    /// - Returns: Magnitude of FFT of filtered, multiplied data
+    func multiplyFFTs(rxData: [[Double]], txData: [[Double]], sampleRate: Double, lowpassCutoff: Double = 5000) -> [[Double]] {
+        guard rxData.count == txData.count && rxData.first?.count == txData.first?.count else {
+            fatalError("Input arrays must have the same dimensions")
+        }
+        
+        let rowCount = rxData.count
+        let colCount = rxData[0].count
+        
+        // multiply
+        var allMultiplied = [[Double]](repeating: [Double](repeating: 0.0, count: colCount), count: rowCount)
+        for i in 0..<rowCount {
+            vDSP_vmulD(rxData[i], 1, txData[i], 1, &allMultiplied[i], 1, vDSP_Length(colCount))
+        }
+        
+        // filter
+        let filter = ButterworthFilter(cutoff: lowpassCutoff, fs: sampleRate)
+        for i in 0..<rowCount {
+            allMultiplied[i] = filter.filter(data: allMultiplied[i])
+        }
+        
+        // compute FFT
+        let chirpSampleCount = rxData[0].count
+        let fftProcessor = RealFFTProcessor(signalLength: chirpSampleCount)
+        let allMultipliedFFTs = fftProcessor.computeFFTMagnitudes(rows: allMultiplied)
+
+        print(allMultipliedFFTs)
+        return allMultipliedFFTs
+    }
     
     private func analyzeReflectedSound(buffer: AVAudioPCMBuffer, time: AVAudioTime) {
         guard let channelData = buffer.floatChannelData?[0] else { return }
