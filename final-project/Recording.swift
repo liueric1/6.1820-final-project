@@ -216,6 +216,24 @@ class Recording: NSObject {
         return (tx: txData, rx: rxData)
     }
     
+    func loadJSONChirp(from filename: String) -> [Float]? {
+        guard let path = Bundle.main.path(forResource: filename, ofType: "json") else {
+            print("File not found: \(filename).json")
+            return nil
+        }
+
+        do {
+            let data = try Data(contentsOf: URL(fileURLWithPath: path))
+            let decoder = JSONDecoder()
+            let array = try decoder.decode([Float].self, from: data)
+            return array
+        } catch {
+            print("Error loading or decoding JSON: \(error)")
+            return nil
+        }
+    }
+
+    
     /// Process signal data by multiplying, filtering, and computing FFT
     /// - Parameters:
     ///   - rxData: Receive data array
@@ -248,10 +266,51 @@ class Recording: NSObject {
         let fftProcessor = RealFFTProcessor(signalLength: chirpSampleCount)
         let allMultipliedFFTs = fftProcessor.computeFFTMagnitudes(rows: allMultiplied)
 
-        print(allMultipliedFFTs)
         return allMultipliedFFTs
     }
     
+//    func testFFTFromJSON() -> [[Double]]{
+//        guard let tx = loadJSONChirp(from: "tx"),
+//              let rx = loadJSONChirp(from: "rx") else {
+//            print("Failed to load test data from JSON.")
+//            return [[]]
+//        }
+//
+//        // Ensure equal length
+//        let chirpLength = min(tx.count, rx.count)
+//        let txTrimmed = Array(tx.prefix(chirpLength))
+//        let rxTrimmed = Array(rx.prefix(chirpLength))
+//
+//        // Wrap in 2D array so it matches expected input [[Double]]
+//        let tx2D: [[Double]] = [txTrimmed.map(Double.init)]
+//        let rx2D: [[Double]] = [rxTrimmed.map(Double.init)]
+//
+//        let fftMagnitudes = multiplyFFTs(rxData: rx2D, txData: tx2D, sampleRate: sampleRate)
+//        print("✅ FFT Test Complete — Output Magnitudes:")
+//        return fftMagnitudes
+//    }
+    
+//    func saveFFTResultToDocumentsAndShare(_ result: [[Double]], filename: String, presentingViewController: UIViewController) {
+//        let encoder = JSONEncoder()
+//        encoder.outputFormatting = [.prettyPrinted]
+//
+//        let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+//        let fileURL = documentsURL.appendingPathComponent(filename)
+//
+//        do {
+//            let data = try encoder.encode(result)
+//            try data.write(to: fileURL)
+//            print("📦 Saved to: \(fileURL.path)")
+//
+//            // Present share sheet for AirDrop/email/etc.
+//            let activityVC = UIActivityViewController(activityItems: [fileURL], applicationActivities: nil)
+//            presentingViewController.present(activityVC, animated: true, completion: nil)
+//
+//        } catch {
+//            print("❌ Failed to save or share FFT output: \(error)")
+//        }
+//    }
+
     private func analyzeReflectedSound(buffer: AVAudioPCMBuffer, time: AVAudioTime) {
         guard let channelData = buffer.floatChannelData?[0] else { return }
         let frameLength = Int(buffer.frameLength)
