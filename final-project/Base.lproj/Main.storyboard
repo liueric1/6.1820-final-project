@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<document type="com.apple.InterfaceBuilder3.CocoaTouch.Storyboard.XIB" version="3.0" toolsVersion="23504" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" useTraitCollections="YES" useSafeAreas="YES" colorMatched="YES" initialViewController="BYZ-38-t0r">
+<document type="com.apple.InterfaceBuilder3.CocoaTouch.Storyboard.XIB" version="3.0" toolsVersion="23727" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" useTraitCollections="YES" useSafeAreas="YES" colorMatched="YES" initialViewController="BYZ-38-t0r">
     <device id="retina6_12" orientation="portrait" appearance="light"/>
     <dependencies>
         <deployment identifier="iOS"/>
-        <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="23506"/>
+        <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="23721"/>
         <capability name="Safe area layout guides" minToolsVersion="9.0"/>
         <capability name="System colors in document resources" minToolsVersion="11.0"/>
         <capability name="documents saved in the Xcode 8 format" minToolsVersion="8.0"/>
@@ -12,13 +12,13 @@
         <!--View Controller-->
         <scene sceneID="tne-QT-ifu">
             <objects>
-                <viewController id="BYZ-38-t0r" customClass="ViewController" customModule="final-project" customModuleProvider="target" sceneMemberID="viewController">
+                <viewController id="BYZ-38-t0r" customClass="ViewController" customModule="final_project" customModuleProvider="target" sceneMemberID="viewController">
                     <view key="view" contentMode="scaleToFill" id="8bC-Xf-vdC">
                         <rect key="frame" x="0.0" y="0.0" width="393" height="852"/>
                         <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                         <subviews>
                             <stackView opaque="NO" contentMode="scaleToFill" axis="vertical" spacing="32" translatesAutoresizingMaskIntoConstraints="NO" id="oAw-jX-aCH">
-                                <rect key="frame" x="140.33333333333334" y="179.66666666666666" width="112.33333333333334" height="72.666666666666657"/>
+                                <rect key="frame" x="140.33333333333334" y="238.66666666666666" width="112.33333333333334" height="72.666666666666657"/>
                                 <subviews>
                                     <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Heart Rate" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="7jV-ee-Rnd">
                                         <rect key="frame" x="0.0" y="0.0" width="112.33333333333333" height="20.333333333333332"/>
@@ -35,7 +35,7 @@
                                 </subviews>
                             </stackView>
                             <stackView opaque="NO" contentMode="scaleToFill" axis="vertical" spacing="8" translatesAutoresizingMaskIntoConstraints="NO" id="8c5-ir-cNk">
-                                <rect key="frame" x="125" y="461.66666666666669" width="143" height="76.666666666666686"/>
+                                <rect key="frame" x="125" y="520.66666666666663" width="143" height="34.333333333333371"/>
                                 <subviews>
                                     <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="qh3-ao-IcP">
                                         <rect key="frame" x="0.0" y="0.0" width="143" height="34.333333333333336"/>
@@ -43,14 +43,6 @@
                                         <buttonConfiguration key="configuration" style="plain" title="Start Recording"/>
                                         <connections>
                                             <action selector="startRecording:" destination="BYZ-38-t0r" eventType="touchUpInside" id="cOJ-Dr-2av"/>
-                                        </connections>
-                                    </button>
-                                    <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="qB9-M0-vqb">
-                                        <rect key="frame" x="0.0" y="42.333333333333314" width="143" height="34.333333333333343"/>
-                                        <state key="normal" title="Button"/>
-                                        <buttonConfiguration key="configuration" style="plain" title="Stop Recording"/>
-                                        <connections>
-                                            <action selector="stopRecording:" destination="BYZ-38-t0r" eventType="touchUpInside" id="7Cg-tA-Vqo"/>
                                         </connections>
                                     </button>
                                 </subviews>
@@ -64,7 +56,6 @@
                             <constraint firstItem="oAw-jX-aCH" firstAttribute="top" secondItem="6Tk-OE-BBY" secondAttribute="top" constant="120.66666666666669" id="VVM-rc-6GF"/>
                             <constraint firstItem="qh3-ao-IcP" firstAttribute="centerX" secondItem="6Tk-OE-BBY" secondAttribute="centerX" id="bDa-Rd-e0n"/>
                             <constraint firstItem="oAw-jX-aCH" firstAttribute="centerX" secondItem="6Tk-OE-BBY" secondAttribute="centerX" id="gy2-Iu-apL"/>
-                            <constraint firstItem="6Tk-OE-BBY" firstAttribute="bottom" secondItem="qB9-M0-vqb" secondAttribute="bottom" constant="279.66666666666663" id="t5m-oD-tGg"/>
                         </constraints>
                     </view>
                     <connections>
