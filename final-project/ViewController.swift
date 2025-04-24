@@ -24,9 +24,12 @@ class ViewController: UIViewController {
         recording.generateTone(startFrequency: 440, endFrequency: 880, chirp_duration: 0.05, total_duration: 5)
         recording.start()
         
-        // TEST FFT & BUTTER FUNCTIONS
-//        let fftMagnitudes = recording.testFFTFromJSON()
-//        recording.saveFFTResultToDocumentsAndShare(fftMagnitudes, filename: "fft_output.json", presentingViewController: self)
+        // TEST FFT
+//        let fftMagnitudes = recording.testFFTsFromMultiChirpJSON(txFilename: "tx_list", rxFilename: "rx_list")
+//        recording.saveFFTResultToDocumentsAndShare(fftMagnitudes, filename: "fft_output_2.json", presentingViewController: self)
+//        
+//        let subtracted = recording.backgroundSubtraction(allMultipliedFfts: fftMagnitudes)
+//        recording.saveFFTResultToDocumentsAndShare(subtracted, filename: "subtracted.json", presentingViewController: self)
         
         Timer.scheduledTimer(withTimeInterval: recordingDuration, repeats: false) { [weak self] _ in
                 guard let self = self else { return }
