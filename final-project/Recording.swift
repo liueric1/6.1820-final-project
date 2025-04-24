@@ -114,9 +114,22 @@ class Recording: NSObject {
         
         if let processedData = processCollectedData() {
                 print("Processing complete. Received \(processedData.rx.count) chirps")
+                let newTx = processedData.tx.map{ row in
+                    row.map{ Double($0) }
+                }
+                let newRx = processedData.rx.map{ row in
+                    row.map{ Double($0) }
+                }
+            
+//            let multiplied_ffts = self.multiplyFFTs(rxData: newRx, txData: newTx, sampleRate: sampleRate)
+//            let subtracted = self.backgroundSubtraction(allMultipliedFfts: multiplied_ffts)
+//            print("Subtracted", subtracted)
+            
             } else {
                 print("Failed to process data")
             }
+        
+        print(rxSignal[0], rxSignal[10], rxSignal[50], txSignal[0], txSignal[10], txSignal[50])
     }
     
     func reset() {
@@ -196,12 +209,10 @@ class Recording: NSObject {
             let detectedFrequency = Float(sampleRate) / Float(bestLag)
             
             // Only report if the detected frequency is within a reasonable range of the expected frequency
-            let frequencyDiff = abs(detectedFrequency - expectedFrequency)
-            if frequencyDiff < 100 { // Allow for some measurement error
-                print("\nExpected frequency: \(String(format: "%.1f", expectedFrequency)) Hz")
-                print("Detected frequency: \(String(format: "%.1f", detectedFrequency)) Hz")
-                print("Amplitude: \(String(format: "%.3f", maxAmplitude))")
-            }
+            print("\nExpected frequency: \(String(format: "%.1f", expectedFrequency)) Hz")
+            print("Detected frequency: \(String(format: "%.1f", detectedFrequency)) Hz")
+            print("Amplitude: \(String(format: "%.3f", maxAmplitude))")
+            
         }
     }
 }
