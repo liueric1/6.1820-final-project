@@ -58,7 +58,6 @@ extension Recording {
             try data.write(to: fileURL)
             print("Saved to: \(fileURL.path)")
 
-            // Present share sheet for AirDrop/email/etc.
             let activityVC = UIActivityViewController(activityItems: [fileURL], applicationActivities: nil)
             presentingViewController.present(activityVC, animated: true, completion: nil)
 

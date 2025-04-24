@@ -11,11 +11,13 @@ import AVFoundation
 import Accelerate
 
 class Recording: NSObject {
+    weak var viewController: UIViewController?
+
      var audioEngine: AVAudioEngine!
      var playerNode: AVAudioPlayerNode!
      var mixerNode: AVAudioMixerNode!
      var isRecording = false
-     let sampleRate: Double = 44100.0
+     let sampleRate: Double = 48000
      let channelCount: AVAudioChannelCount = 1
      var lastPeakTime: TimeInterval = 0
      var lastPeakAmplitude: Float = 0
@@ -40,7 +42,7 @@ class Recording: NSObject {
      func setupAudioSession() {
         do {
             let session = AVAudioSession.sharedInstance()
-            try session.setCategory(.playAndRecord, mode: .default)
+            try session.setCategory(.playAndRecord, mode: .measurement, options: [.allowBluetoothA2DP, .defaultToSpeaker])
             try session.setActive(true)
         } catch {
             print("Failed to set up audio session: \(error.localizedDescription)")
@@ -53,10 +55,13 @@ class Recording: NSObject {
         self.mixerNode = AVAudioMixerNode()
         
         let format = AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: channelCount)!
-        
+         
+        let inputNode = audioEngine.inputNode
+             
         self.audioEngine.attach(playerNode)
         self.audioEngine.attach(mixerNode)
-        
+         
+        self.audioEngine.connect(inputNode, to: mixerNode, format: format)
         self.audioEngine.connect(playerNode, to: mixerNode, format: format)
         self.audioEngine.connect(mixerNode, to: audioEngine.mainMixerNode, format: format)
     }
@@ -97,7 +102,7 @@ class Recording: NSObject {
         do {
             try audioEngine.start()
             playerNode.play()
-            startMonitoring()  // Start monitoring for reflected sound
+            startMonitoring()
             isRecording = true
             print("Audio engine started and monitoring begun")
         } catch {
@@ -111,7 +116,7 @@ class Recording: NSObject {
         audioEngine.stop()
         isRecording = false
         print("Audio engine stopped and monitoring ended")
-        
+                
         if let processedData = processCollectedData() {
                 print("Processing complete. Received \(processedData.rx.count) chirps")
                 let newTx = processedData.tx.map{ row in
@@ -120,16 +125,19 @@ class Recording: NSObject {
                 let newRx = processedData.rx.map{ row in
                     row.map{ Double($0) }
                 }
-            
-//            let multiplied_ffts = self.multiplyFFTs(rxData: newRx, txData: newTx, sampleRate: sampleRate)
-//            let subtracted = self.backgroundSubtraction(allMultipliedFfts: multiplied_ffts)
-//            print("Subtracted", subtracted)
+                
+                let multiplied_ffts = self.multiplyFFTs(rxData: newRx, txData: newTx, sampleRate: sampleRate)
+                
+                // *** Save multiplied ffts for testing *** //
+                if let vc = self.viewController {
+                    self.saveFFTResultToDocumentsAndShare(multiplied_ffts, filename: "multiplied_ffts.json", presentingViewController: vc)
+                } else {
+                    print("Error: No view controller reference available")
+                }
             
             } else {
                 print("Failed to process data")
             }
-        
-        print(rxSignal[0], rxSignal[10], rxSignal[50], txSignal[0], txSignal[10], txSignal[50])
     }
     
     func reset() {
@@ -141,8 +149,9 @@ class Recording: NSObject {
      func startMonitoring() {
         let format = AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: channelCount)!
         
-        mixerNode.installTap(onBus: 0, bufferSize: 1024, format: format) { buffer, time in
-            // Analyze the incoming audio buffer
+        // buffer size = chirp duration * sample rate
+        mixerNode.installTap(onBus: 0, bufferSize: 2400, format: format)
+         { buffer, time in
             self.analyzeReflectedSound(buffer: buffer, time: time)
             self.storeReceivedAudio(buffer: buffer)
         }
@@ -155,8 +164,8 @@ class Recording: NSObject {
      func storeReceivedAudio(buffer: AVAudioPCMBuffer) {
             guard let channelData = buffer.floatChannelData?[0] else { return }
             let frameLength = Int(buffer.frameLength)
-            
             let newSamples = Array(UnsafeBufferPointer(start: channelData, count: frameLength))
+         
             rxSignal.append(contentsOf: newSamples)
         }
     
