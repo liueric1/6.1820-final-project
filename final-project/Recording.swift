@@ -118,10 +118,18 @@ class Recording: NSObject {
         print("Audio engine stopped and monitoring ended")
         
         if let processedData = processCollectedData() {
-                print("Processing complete. Received \(processedData.rx.count) chirps")
-            } else {
-                print("Failed to process data")
+            print("Processing complete. Received \(processedData.rx.count) chirps")
+            let newTx = processedData.tx.map{ row in
+                row.map{ Double($0) }
             }
+            let newRx = processedData.rx.map{ row in
+                row.map{ Double($0) }
+            }
+            let distances = peakFinding(rxData: newRx, txData: newTx, sampleRate: self.sampleRate, freqHigh: Double(self.freqHigh), freqLow: Double(self.freqLow), chirpLength: self.chirpDuration)
+            print(distances)
+        } else {
+            print("Failed to process data")
+        }
     }
     
     func reset() {
@@ -252,7 +260,8 @@ class Recording: NSObject {
         // multiply
         var allMultiplied = [[Double]](repeating: [Double](repeating: 0.0, count: colCount), count: rowCount)
         for i in 0..<rowCount {
-            vDSP_vmulD(rxData[i], 1, txData[i], 1, &allMultiplied[i], 1, vDSP_Length(colCount))
+//            here
+            vDSP_vmulD(rxData[i], 1, txData[i], 1, &allMultiplied[i][0], 1, vDSP_Length(colCount))
         }
         
         // filter
@@ -267,6 +276,113 @@ class Recording: NSObject {
         let allMultipliedFFTs = fftProcessor.computeFFTMagnitudes(rows: allMultiplied)
 
         return allMultipliedFFTs
+    }
+    
+    func backgroundSubtraction(allMultipliedFfts: [[Double]]) -> [[Double]] {
+        var subtracted: [[Double]] = []
+        for i in 1..<allMultipliedFfts.count {
+            let row = allMultipliedFfts[i]
+            let prev = allMultipliedFfts[i-1]
+            var diff: [Double] = []
+            for j in 0..<row.count {
+                diff.append(row[j] - prev[j])
+            }
+            subtracted.append(diff)
+        }
+        return subtracted
+    }
+    
+    func shift(fft: [[Double]]) -> [[Double]] {
+        print(fft[0][0], fft[1][0])
+        print(fft[0][1], fft[1][1])
+        print(fft[0][2], fft[1][2])
+        let columnCount = fft.first!.count
+        let offset = columnCount / 2
+
+        return fft.map { row in
+            Array(row[(columnCount - offset)...] + row[..<(columnCount - offset)])
+        }
+    }
+    
+    func applyArgmax(matrix: [[Double]]) -> [Int] {
+        return matrix.map { row in
+            row.indices.max(by: { row[$0] < row[$1] })!
+        }
+    }
+    
+    func median(array: [Int]) -> Double {
+        let sorted = array.sorted()
+        if sorted.count % 2 == 0 {
+            return Double((sorted[(sorted.count / 2)] + sorted[(sorted.count / 2) - 1])) / 2
+        }
+        else {
+            return Double(sorted[(sorted.count - 1) / 2])
+        }
+    }
+    
+    func getColumns(matrix: [[Double]], columnIndices: [Int]) -> [[Double]] {
+        return matrix.map { row in
+            return columnIndices.map { idx in
+                return row[idx]
+            }
+        }
+    }
+    
+    func getDistanceFromPeak(idx: Int, windowRangeStart: Int, medianPeakLocation: Int) -> Int {
+        return idx + windowRangeStart - medianPeakLocation
+    }
+    
+    func indxToDistance(idx: Int, windowLength: Int, sampleRate: Double, freqHigh: Double, freqLow: Double, chirpLength: Double) -> Double {
+        let speedSound: Double = 343
+        let top: Double = ((Double(idx) *  Double(windowLength) / sampleRate) * speedSound)
+        let bottom: Double = (2 * ((freqHigh - freqLow) / chirpLength))
+        return top / bottom
+    }
+    
+    func medianFilter(array: [Int], size: Int) -> [Int] {
+        let pad = size / 2
+        let padded = Array(repeating: array.first, count: pad)
+            + array
+            + Array(repeating: array.last, count: pad)
+
+        let rolled = pad..<(padded.count - pad)
+        return rolled.map { i in
+            let window = padded[(i - pad)...(i + pad)]
+            let sortedWindow = window.compactMap{ $0 }.sorted()
+            return sortedWindow[pad]
+        }
+    }
+    
+    func movingAverage(array: [Double], size: Int) -> [Double] {
+        var result: [Double] = []
+        var windowSum = array.prefix(size).reduce(0, +)
+        result.append(windowSum / Double(size))
+
+        for i in size..<array.count {
+            windowSum += array[i] - array[i - size]
+            result.append(windowSum / Double(size))
+        }
+        return result
+    }
+    
+    func peakFinding(rxData: [[Double]], txData: [[Double]], sampleRate: Double, freqHigh: Double, freqLow: Double, chirpLength: Double, lowpassCutoff: Double = 5000) -> [Double] {
+        var shifted = shift(fft: multiplyFFTs(rxData: rxData, txData: txData, sampleRate: sampleRate, lowpassCutoff: lowpassCutoff))
+        var subtracted = backgroundSubtraction(allMultipliedFfts: shifted)
+        var allPeakLocations = applyArgmax(matrix: shifted)
+        var medianPeakLocation = Int(median(array: allPeakLocations))
+        let peakWindowSize: Int = 100
+        let windowRangeStart = medianPeakLocation - peakWindowSize/2
+        let windowRange = [Int](windowRangeStart..<(windowRangeStart + peakWindowSize))
+        let windowLength = rxData.first!.count
+        let subtractedFiltered = getColumns(matrix: subtracted, columnIndices: windowRange)
+        let argmaxes = applyArgmax(matrix: subtractedFiltered)
+        let MOVING_AVERAGE_LENGTH = 5
+        let MEDIAN_FILTER_LENGTH  = 7
+        let medFiltered = medianFilter(array: argmaxes, size: MEDIAN_FILTER_LENGTH)
+        let argmaxDistancesMed = medFiltered.map { getDistanceFromPeak(idx: $0, windowRangeStart: windowRangeStart, medianPeakLocation: medianPeakLocation) }
+        let argmaxDistances = argmaxDistancesMed.map { indxToDistance(idx: $0, windowLength: windowLength, sampleRate: sampleRate, freqHigh: freqHigh, freqLow: freqLow, chirpLength: chirpLength) }
+        let finalDistances = movingAverage(array: argmaxDistances, size: MOVING_AVERAGE_LENGTH)
+        return finalDistances
     }
     
 //    func testFFTFromJSON() -> [[Double]]{
