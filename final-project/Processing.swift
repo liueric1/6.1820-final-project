@@ -114,10 +114,10 @@ extension Recording {
         }
     
     func peakFinding(rxData: [[Double]], txData: [[Double]], sampleRate: Double, freqHigh: Double, freqLow: Double, chirpLength: Double, lowpassCutoff: Double = 5000) -> [Double] {
-        var shifted = shift(fft: multiplyFFTs(rxData: rxData, txData: txData, sampleRate: sampleRate, lowpassCutoff: lowpassCutoff))
-        var subtracted = backgroundSubtraction(allMultipliedFfts: shifted)
-        var allPeakLocations = applyArgmax(matrix: shifted)
-        var medianPeakLocation = Int(median(array: allPeakLocations))
+        let shifted = shift(fft: multiplyFFTs(rxData: rxData, txData: txData, sampleRate: sampleRate, lowpassCutoff: lowpassCutoff))
+        let subtracted = backgroundSubtraction(allMultipliedFfts: shifted)
+        let allPeakLocations = applyArgmax(matrix: shifted)
+        let medianPeakLocation = Int(median(array: allPeakLocations))
         let peakWindowSize: Int = 100
         let windowRangeStart = medianPeakLocation - peakWindowSize/2
         let windowRange = [Int](windowRangeStart..<(windowRangeStart + peakWindowSize))
@@ -127,8 +127,9 @@ extension Recording {
         let MOVING_AVERAGE_LENGTH = 5
         let MEDIAN_FILTER_LENGTH  = 7
         let medFiltered = medianFilter(array: argmaxes, size: MEDIAN_FILTER_LENGTH)
+        let columnCount = shifted.first!.count
         let argmaxDistancesMed = medFiltered.map { getDistanceFromPeak(idx: $0, windowRangeStart: windowRangeStart, medianPeakLocation: medianPeakLocation) }
-        let argmaxDistances = argmaxDistancesMed.map { indxToDistance(idx: $0, windowLength: windowLength, sampleRate: sampleRate, freqHigh: freqHigh, freqLow: freqLow, chirpLength: chirpLength) }
+        let argmaxDistances = argmaxDistancesMed.map { indxToDistance(idx: $0, windowLength: windowLength, sampleRate: sampleRate, freqHigh: freqHigh, freqLow: freqLow, chirpLength: chirpLength, columnCount: columnCount) }
         let finalDistances = movingAverage(array: argmaxDistances, size: MOVING_AVERAGE_LENGTH)
         return finalDistances
     }

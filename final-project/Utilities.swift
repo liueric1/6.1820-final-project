@@ -52,9 +52,11 @@ extension Recording {
         return idx + windowRangeStart - medianPeakLocation
     }
     
-    func indxToDistance(idx: Int, windowLength: Int, sampleRate: Double, freqHigh: Double, freqLow: Double, chirpLength: Double) -> Double {
+    func indxToDistance(idx: Int, windowLength: Int, sampleRate: Double, freqHigh: Double, freqLow: Double, chirpLength: Double, columnCount: Int) -> Double {
         let speedSound: Double = 343
-        let top: Double = ((Double(idx) *  Double(windowLength) / sampleRate) * speedSound)
+        
+        let delta_f = Double(idx) *  (sampleRate / Double(columnCount))
+        let top: Double = delta_f * speedSound
         let bottom: Double = (2 * ((freqHigh - freqLow) / chirpLength))
         return top / bottom
     }

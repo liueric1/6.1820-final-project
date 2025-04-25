@@ -127,10 +127,18 @@ class Recording: NSObject {
                 }
                 
                 let multiplied_ffts = self.multiplyFFTs(rxData: newRx, txData: newTx, sampleRate: sampleRate)
+                let peaks = self.peakFinding(rxData: newRx, txData: newTx, sampleRate: sampleRate, freqHigh: 17000, freqLow: 2300, chirpLength: 0.05)
                 
                 // *** Save multiplied ffts for testing *** //
+//                if let vc = self.viewController {
+//                    self.saveFFTResultToDocumentsAndShare(multiplied_ffts, filename: "multiplied_ffts.json", presentingViewController: vc)
+//                } else {
+//                    print("Error: No view controller reference available")
+//                }
+                
+                // *** Save peaks for testing *** //
                 if let vc = self.viewController {
-                    self.saveFFTResultToDocumentsAndShare(multiplied_ffts, filename: "multiplied_ffts.json", presentingViewController: vc)
+                    self.saveFFTResultToDocumentsAndShare([peaks], filename: "peaks.json", presentingViewController: vc)
                 } else {
                     print("Error: No view controller reference available")
                 }
