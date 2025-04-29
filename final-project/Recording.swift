@@ -127,7 +127,7 @@ class Recording: NSObject {
                 }
                 
                 let multiplied_ffts = self.multiplyFFTs(rxData: newRx, txData: newTx, sampleRate: sampleRate)
-                let peaks = self.peakFinding(rxData: newRx, txData: newTx, sampleRate: sampleRate, freqHigh: 17000, freqLow: 2300, chirpLength: 0.05)
+                let peaks = self.peakFinding(rxData: newRx, txData: newTx, sampleRate: sampleRate, freqHigh: 23000, freqLow: 17000, chirpLength: 0.05)
                 
                 // *** Save multiplied ffts for testing *** //
 //                if let vc = self.viewController {

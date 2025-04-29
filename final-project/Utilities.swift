@@ -25,9 +25,24 @@ extension Recording {
     }
     
     func applyArgmax(matrix: [[Double]]) -> [Int] {
-        return matrix.map { row in
-            row.indices.max(by: { row[$0] < row[$1] })!
+        let numColumns = matrix.first!.count
+        var argmaxes: [Int] = []
+
+        for col in 0..<numColumns {
+            // Find the index of the maximum value in each column
+            let columnValues = matrix.map { $0[col] }
+            var max: Double = -1
+            var argmax = 0
+            for i in 0..<columnValues.count {
+                if columnValues[i] > max {
+                    max = columnValues[i]
+                    argmax = i
+                }
+            }
+            argmaxes.append(argmax)
         }
+
+        return argmaxes
     }
     
     func median(array: [Int]) -> Double {
