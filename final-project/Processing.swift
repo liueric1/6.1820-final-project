@@ -86,52 +86,94 @@ extension Recording {
         }
         
         // filter
-        let filter = ButterworthFilter(cutoff: lowpassCutoff, fs: sampleRate)
-        for i in 0..<rowCount {
-            allMultiplied[i] = filter.filter(data: allMultiplied[i])
-        }
+        //        let filter = ButterworthFilter(cutoff: lowpassCutoff, fs: sampleRate)
+        //        for i in 0..<rowCount {
+        //            allMultiplied[i] = filter.filter(data: allMultiplied[i])
+        //        }
         
         // compute FFT
         let chirpSampleCount = rxData[0].count
         let fftProcessor = RealFFTProcessor(signalLength: chirpSampleCount)
-        let allMultipliedFFTs = fftProcessor.computeFFTMagnitudes(rows: allMultiplied)
-
+        let validSignals = allMultiplied.filter { $0.count == 4800 }
+        let allMultipliedFFTs = fftProcessor.computeFFTMagnitudes(rows: validSignals)
+        
         return allMultipliedFFTs
     }
     
     func backgroundSubtraction(allMultipliedFfts: [[Double]]) -> [[Double]] {
-            var subtracted: [[Double]] = []
-            for i in 1..<allMultipliedFfts.count {
-                let row = allMultipliedFfts[i]
-                let prev = allMultipliedFfts[i-1]
-                var diff: [Double] = []
-                for j in 0..<row.count {
-                    diff.append(row[j] - prev[j])
-                }
-                subtracted.append(diff)
+        var subtracted: [[Double]] = []
+        for i in 1..<allMultipliedFfts.count {
+            let row = allMultipliedFfts[i]
+            let prev = allMultipliedFfts[i-1]
+            var diff: [Double] = []
+            for j in 0..<row.count {
+                diff.append(row[j] - prev[j])
             }
-            return subtracted
+            subtracted.append(diff)
         }
+        return subtracted
+    }
     
-    func peakFinding(rxData: [[Double]], txData: [[Double]], sampleRate: Double, freqHigh: Double, freqLow: Double, chirpLength: Double, lowpassCutoff: Double = 5000) -> [Double] {
+    func HR_analysis(rxData: [[Double]], txData: [[Double]], sampleRate: Double, freqHigh: Double, freqLow: Double, chirpLength: Double, lowpassCutoff: Double = 5000) -> Int {
         let shifted = shift(fft: multiplyFFTs(rxData: rxData, txData: txData, sampleRate: sampleRate, lowpassCutoff: lowpassCutoff))
         let subtracted = backgroundSubtraction(allMultipliedFfts: shifted)
         let allPeakLocations = applyArgmax(matrix: shifted)
         let medianPeakLocation = Int(median(array: allPeakLocations))
-        let peakWindowSize: Int = 100
-        let windowRangeStart = medianPeakLocation - peakWindowSize/2
-        let windowRange = [Int](windowRangeStart..<(windowRangeStart + peakWindowSize))
+        let peakWindowSize = 100
         let windowLength = rxData.first!.count
+
+        let windowRangeStart = max(0, medianPeakLocation - peakWindowSize / 2)
+        let windowRangeEnd = min(windowRangeStart + peakWindowSize, windowLength)
+        let windowRange = [Int](windowRangeStart..<windowRangeEnd)
         let subtractedFiltered = getColumns(matrix: subtracted, columnIndices: windowRange)
+        
         let argmaxes = applyArgmax(matrix: subtractedFiltered)
         let MOVING_AVERAGE_LENGTH = 5
         let MEDIAN_FILTER_LENGTH  = 7
         let medFiltered = medianFilter(array: argmaxes, size: MEDIAN_FILTER_LENGTH)
-        let columnCount = shifted.first!.count
-        let argmaxDistancesMed = medFiltered.map { getDistanceFromPeak(idx: $0, windowRangeStart: windowRangeStart, medianPeakLocation: medianPeakLocation) }
-        let argmaxDistances = argmaxDistancesMed.map { indxToDistance(idx: $0, windowLength: windowLength, sampleRate: sampleRate, freqHigh: freqHigh, freqLow: freqLow, chirpLength: chirpLength, columnCount: columnCount) }
-        let finalDistances = movingAverage(array: argmaxDistances, size: MOVING_AVERAGE_LENGTH)
-        return finalDistances
+        let bin_to_track = Int(median(array: medFiltered))
+        
+        let phases = calculatePhasesWithRealFFT(fftData: shifted, binToTrack: bin_to_track)
+        let unwrappedPhases = unwrapPhases(phases)
+        let detrendedPhase = [detrend(unwrappedPhases)]
+                
+        let fs = 1 / chirpLength
+        
+        let chirpSampleCount = detrendedPhase[0].count
+        let fftProcessor = RealFFTProcessor(signalLength: chirpSampleCount)
+        let hrFFT = fftProcessor.computeFFTMagnitudes(rows: detrendedPhase)
+        
+        // Compute frequencies (same for each row)
+        let hrFreqs = fftFrequencies(length: hrFFT[0].count, sampleRate: fs)
+        let hrBpmFreqs = hrFreqs.map { $0 * 60 }
+        
+        // Create a mask for BPM range [40, 200]
+        let maskIndices = hrBpmFreqs.enumerated()
+            .filter { $0.element >= 40 && $0.element <= 200 }
+            .map { $0.offset }
+        
+        let maskedHrFFT: [[Double]] = hrFFT.map { row in
+            maskIndices.map { idx in Foundation.fabs(row[idx]) }
+        }
+        
+        let averagedHrFFTMag: [Double] = (0..<maskIndices.count).map { i in
+            maskedHrFFT.map { $0[i] }.reduce(0, +) / Double(maskedHrFFT.count)
+        }
+        
+        let maskedHrBpmFreqs = maskIndices.map { hrBpmFreqs[$0] }
+        
+        var peakIdx = 0
+        if averagedHrFFTMag.count > 5 {
+            let minBpm = 40
+            let minIdx = maskedHrBpmFreqs.enumerated()
+                .min(by: { abs($0.element - Double(minBpm)) < abs($1.element - Double(minBpm)) })?.offset ?? 0
+            peakIdx = averagedHrFFTMag[minIdx...].enumerated()
+                .max(by: { $0.element < $1.element })?.offset ?? 0 + minIdx
+        } else {
+            peakIdx = averagedHrFFTMag.enumerated()
+                .max(by: { $0.element < $1.element })?.offset ?? 0
+        }
+        
+        return Int(maskedHrBpmFreqs[peakIdx])
     }
-
 }

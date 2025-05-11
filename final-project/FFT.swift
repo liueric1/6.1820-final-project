@@ -29,6 +29,8 @@ class RealFFTProcessor {
     }
 
     func computeMagnitude(signal: [Double]) -> [Double] {
+        print("Expected length: \(length), actual signal count: \(signal.count)")
+
         precondition(signal.count == length, "Signal length must match initialized FFT length.")
 
         var inputCopy = signal

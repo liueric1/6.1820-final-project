@@ -12,26 +12,26 @@ import Accelerate
 
 class Recording: NSObject {
     weak var viewController: UIViewController?
-
-     var audioEngine: AVAudioEngine!
-     var playerNode: AVAudioPlayerNode!
-     var mixerNode: AVAudioMixerNode!
-     var isRecording = false
-     let sampleRate: Double = 48000
-     let channelCount: AVAudioChannelCount = 1
-     var lastPeakTime: TimeInterval = 0
-     var lastPeakAmplitude: Float = 0
-     var startFrequency: Float = 0
-     var endFrequency: Float = 0
-     var chirpDuration: Double = 0
-     var sweepStartTime: TimeInterval = 0
     
-     var txSignal: [Float] = []
-     var rxSignal: [Float] = []
+    var audioEngine: AVAudioEngine!
+    var playerNode: AVAudioPlayerNode!
+    var mixerNode: AVAudioMixerNode!
+    var isRecording = false
+    let sampleRate: Double = 48000
+    let channelCount: AVAudioChannelCount = 1
+    var lastPeakTime: TimeInterval = 0
+    var lastPeakAmplitude: Float = 0
+    var startFrequency: Float = 0
+    var endFrequency: Float = 0
+    var chirpDuration: Double = 0
+    var sweepStartTime: TimeInterval = 0
+    
+    var txSignal: [Float] = []
+    var rxSignal: [Float] = []
     
     // params for Bandpass filter
-     var freqLow: Float = 100.0
-     var freqHigh: Float = 20000.0
+    var freqLow: Float = 100.0
+    var freqHigh: Float = 20000.0
     
     override init() {
         super.init()
@@ -39,7 +39,7 @@ class Recording: NSObject {
         setupAudioEngine()
     }
     
-     func setupAudioSession() {
+    func setupAudioSession() {
         do {
             let session = AVAudioSession.sharedInstance()
             try session.setCategory(.playAndRecord, mode: .measurement, options: [.allowBluetoothA2DP, .defaultToSpeaker])
@@ -49,18 +49,18 @@ class Recording: NSObject {
         }
     }
     
-     func setupAudioEngine() {
+    func setupAudioEngine() {
         self.audioEngine = AVAudioEngine()
         self.playerNode = AVAudioPlayerNode()
         self.mixerNode = AVAudioMixerNode()
         
         let format = AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: channelCount)!
-         
+        
         let inputNode = audioEngine.inputNode
-             
+        
         self.audioEngine.attach(playerNode)
         self.audioEngine.attach(mixerNode)
-         
+        
         self.audioEngine.connect(inputNode, to: mixerNode, format: format)
         self.audioEngine.connect(playerNode, to: mixerNode, format: format)
         self.audioEngine.connect(mixerNode, to: audioEngine.mainMixerNode, format: format)
@@ -97,7 +97,7 @@ class Recording: NSObject {
         playerNode.scheduleBuffer(buffer, at: nil, options: [])
         print("FMCW tone generated from \(startFrequency)Hz to \(endFrequency)Hz, repeated for \(total_duration)s")
     }
-
+    
     func start() {
         do {
             try audioEngine.start()
@@ -116,121 +116,139 @@ class Recording: NSObject {
         audioEngine.stop()
         isRecording = false
         print("Audio engine stopped and monitoring ended")
-                
-        if let processedData = processCollectedData() {
-                print("Processing complete. Received \(processedData.rx.count) chirps")
-                let newTx = processedData.tx.map{ row in
-                    row.map{ Double($0) }
-                }
-                let newRx = processedData.rx.map{ row in
-                    row.map{ Double($0) }
-                }
-                
-                let multiplied_ffts = self.multiplyFFTs(rxData: newRx, txData: newTx, sampleRate: sampleRate)
-                let peaks = self.peakFinding(rxData: newRx, txData: newTx, sampleRate: sampleRate, freqHigh: 23000, freqLow: 17000, chirpLength: 0.05)
-                
-                // *** Save multiplied ffts for testing *** //
-//                if let vc = self.viewController {
-//                    self.saveFFTResultToDocumentsAndShare(multiplied_ffts, filename: "multiplied_ffts.json", presentingViewController: vc)
-//                } else {
-//                    print("Error: No view controller reference available")
-//                }
-                
-                // *** Save peaks for testing *** //
-                if let vc = self.viewController {
-                    self.saveFFTResultToDocumentsAndShare([peaks], filename: "peaks.json", presentingViewController: vc)
-                } else {
-                    print("Error: No view controller reference available")
-                }
-            
-            } else {
-                print("Failed to process data")
-            }
-    }
-    
-    func reset() {
-        txSignal = []
-        rxSignal = []
-        isRecording = false
-    }
-    
-     func startMonitoring() {
-        let format = AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: channelCount)!
         
-        // buffer size = chirp duration * sample rate
-        mixerNode.installTap(onBus: 0, bufferSize: 2400, format: format)
-         { buffer, time in
-            self.analyzeReflectedSound(buffer: buffer, time: time)
-            self.storeReceivedAudio(buffer: buffer)
+        if let processedData = processCollectedData() {
+            print("Processing complete. Received \(processedData.rx.count) chirps")
+            
+            // replace with ur laptop IP!!!!
+            let url = URL(string: "http://10.29.179.25:5001/estimate_bpm")!
+            var request = URLRequest(url: url)
+            request.httpMethod = "POST"
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            
+            // Ensure jsonBody is properly structured
+            let jsonBody: [String: Any] = [
+                "tx": txSignal ,
+                "rx": rxSignal
+            ]
+            
+            do {
+                let jsonData = try JSONSerialization.data(withJSONObject: jsonBody, options: [])
+                request.httpBody = jsonData
+            } catch {
+                print("Failed to serialize JSON:", error)
+            }
+            
+            let task = URLSession.shared.dataTask(with: request) { data, response, error in
+                if let error = error {
+                    print("Error making POST request: \(error)")
+                    return
+                }
+                
+                guard let data = data else {
+                    print("No data received")
+                    return
+                }
+                
+                do {
+                    if let json = try JSONSerialization.jsonObject(with: data, options: []) as? [String: Any],
+                       let bpm = json["bpm"] as? Double {
+                        print("Heart Rate Estimate (from Flask): \(bpm)")
+                    } else {
+                        print("Unexpected JSON response: \(String(data: data, encoding: .utf8) ?? "nil")")
+                    }
+                } catch {
+                    print("Failed to parse JSON: \(error)")
+                }
+            }
+            
+            task.resume()
         }
     }
-    
-     func stopMonitoring() {
-        mixerNode.removeTap(onBus: 0)
-    }
-    
-     func storeReceivedAudio(buffer: AVAudioPCMBuffer) {
+
+        func reset() {
+            txSignal = []
+            rxSignal = []
+            isRecording = false
+        }
+        
+        func startMonitoring() {
+            let format = AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: channelCount)!
+            
+            // buffer size = chirp duration * sample rate
+            mixerNode.installTap(onBus: 0, bufferSize: 2400, format: format)
+            { buffer, time in
+                self.analyzeReflectedSound(buffer: buffer, time: time)
+                self.storeReceivedAudio(buffer: buffer)
+            }
+        }
+        
+        func stopMonitoring() {
+            mixerNode.removeTap(onBus: 0)
+        }
+        
+        func storeReceivedAudio(buffer: AVAudioPCMBuffer) {
             guard let channelData = buffer.floatChannelData?[0] else { return }
             let frameLength = Int(buffer.frameLength)
             let newSamples = Array(UnsafeBufferPointer(start: channelData, count: frameLength))
-         
+            
             rxSignal.append(contentsOf: newSamples)
         }
-    
-     func analyzeReflectedSound(buffer: AVAudioPCMBuffer, time: AVAudioTime) {
-        guard let channelData = buffer.floatChannelData?[0] else { return }
-        let frameLength = Int(buffer.frameLength)
         
-        // Calculate maximum amplitude
-        var maxAmplitude: Float = 0
-        for i in 0..<frameLength {
-            maxAmplitude = max(maxAmplitude, abs(channelData[i]))
-        }
-        
-        // Only analyze if we detect a clear signal
-        if maxAmplitude > 0.01 {
-            // Calculate the expected frequency at this time in the sweep
-            let elapsedTime = CACurrentMediaTime() - sweepStartTime
-            let sweepPosition = elapsedTime.truncatingRemainder(dividingBy: chirpDuration)
-            let expectedFrequency = startFrequency + (endFrequency - startFrequency) * Float(sweepPosition / chirpDuration)
+        func analyzeReflectedSound(buffer: AVAudioPCMBuffer, time: AVAudioTime) {
+            guard let channelData = buffer.floatChannelData?[0] else { return }
+            let frameLength = Int(buffer.frameLength)
             
-            // Use autocorrelation to detect frequency
-            var sum: Float = 0
-            let maxLag = Int(sampleRate / Double(startFrequency)) // Maximum lag based on lowest frequency
-            let minLag = Int(sampleRate / Double(endFrequency))   // Minimum lag based on highest frequency
-            
-            // Calculate autocorrelation for a range of lags
-            for lag in minLag...maxLag {
-                var correlation: Float = 0
-                for i in 0..<(frameLength - lag) {
-                    correlation += channelData[i] * channelData[i + lag]
-                }
-                sum = max(sum, correlation)
+            // Calculate maximum amplitude
+            var maxAmplitude: Float = 0
+            for i in 0..<frameLength {
+                maxAmplitude = max(maxAmplitude, abs(channelData[i]))
             }
             
-            // Find the lag that gives maximum correlation
-            var maxCorrelation: Float = 0
-            var bestLag = 0
-            for lag in minLag...maxLag {
-                var correlation: Float = 0
-                for i in 0..<(frameLength - lag) {
-                    correlation += channelData[i] * channelData[i + lag]
+            // Only analyze if we detect a clear signal
+            if maxAmplitude > 0.01 {
+                // Calculate the expected frequency at this time in the sweep
+                let elapsedTime = CACurrentMediaTime() - sweepStartTime
+                let sweepPosition = elapsedTime.truncatingRemainder(dividingBy: chirpDuration)
+                let expectedFrequency = startFrequency + (endFrequency - startFrequency) * Float(sweepPosition / chirpDuration)
+                
+                // Use autocorrelation to detect frequency
+                var sum: Float = 0
+                let maxLag = Int(sampleRate / Double(startFrequency)) // Maximum lag based on lowest frequency
+                let minLag = Int(sampleRate / Double(endFrequency))   // Minimum lag based on highest frequency
+                
+                // Calculate autocorrelation for a range of lags
+                for lag in minLag...maxLag {
+                    var correlation: Float = 0
+                    for i in 0..<(frameLength - lag) {
+                        correlation += channelData[i] * channelData[i + lag]
+                    }
+                    sum = max(sum, correlation)
                 }
-                if correlation > maxCorrelation {
-                    maxCorrelation = correlation
-                    bestLag = lag
+                
+                // Find the lag that gives maximum correlation
+                var maxCorrelation: Float = 0
+                var bestLag = 0
+                for lag in minLag...maxLag {
+                    var correlation: Float = 0
+                    for i in 0..<(frameLength - lag) {
+                        correlation += channelData[i] * channelData[i + lag]
+                    }
+                    if correlation > maxCorrelation {
+                        maxCorrelation = correlation
+                        bestLag = lag
+                    }
                 }
+                
+                // Calculate frequency from the best lag
+                let detectedFrequency = Float(sampleRate) / Float(bestLag)
+                
+                // Only report if the detected frequency is within a reasonable range of the expected frequency
+                print("\nExpected frequency: \(String(format: "%.1f", expectedFrequency)) Hz")
+                print("Detected frequency: \(String(format: "%.1f", detectedFrequency)) Hz")
+                print("Amplitude: \(String(format: "%.3f", maxAmplitude))")
+                
             }
-            
-            // Calculate frequency from the best lag
-            let detectedFrequency = Float(sampleRate) / Float(bestLag)
-            
-            // Only report if the detected frequency is within a reasonable range of the expected frequency
-            print("\nExpected frequency: \(String(format: "%.1f", expectedFrequency)) Hz")
-            print("Detected frequency: \(String(format: "%.1f", detectedFrequency)) Hz")
-            print("Amplitude: \(String(format: "%.3f", maxAmplitude))")
-            
         }
     }
-}
-
+    

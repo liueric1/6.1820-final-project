@@ -12,6 +12,51 @@ import Accelerate
 
 extension Recording {
     
+    func calculatePhasesWithRealFFT(fftData: [[Double]], binToTrack: Int) -> [Double] {
+        return fftData.map { phaseWithRealFFT(at: binToTrack, from: $0) }
+    }
+    
+    func phaseWithRealFFT(at bin: Int, from data: [Double]) -> Double {
+        let real = data[bin * 2]
+        let imag = data[bin * 2 + 1]
+        return atan2(imag, real)
+    }
+    
+    func unwrapPhases(_ phases: [Double]) -> [Double] {
+        var unwrapped = [phases[0]]
+        for i in 1..<phases.count {
+            var diff = phases[i] - unwrapped.last!
+            if diff > .pi {
+                diff -= 2 * .pi
+            } else if diff < -.pi {
+                diff += 2 * .pi
+            }
+            unwrapped.append(unwrapped.last! + diff)
+        }
+        return unwrapped
+    }
+
+    func detrend(_ phases: [Double]) -> [Double] {
+        let n = phases.count
+        let x = Array(0..<n).map { Double($0) }
+        let slope = linearRegression(x: x, y: phases)
+        return zip(x, phases).map { $1 - slope * $0 }
+    }
+    
+    func linearRegression(x: [Double], y: [Double]) -> Double {
+        let n = Double(x.count)
+        let sumX = x.reduce(0, +)
+        let sumY = y.reduce(0, +)
+        let sumXY = zip(x, y).map { $0 * $1 }.reduce(0, +)
+        let sumX2 = x.map { $0 * $0 }.reduce(0, +)
+        return (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX)
+    }
+    
+    func fftFrequencies(length: Int, sampleRate: Double) -> [Double] {
+        let n = Double(length)
+        return (0..<length).map { Double($0) * sampleRate / n }
+    }
+    
     func shift(fft: [[Double]]) -> [[Double]] {
         print(fft[0][0], fft[1][0])
         print(fft[0][1], fft[1][1])
@@ -58,10 +103,14 @@ extension Recording {
     func getColumns(matrix: [[Double]], columnIndices: [Int]) -> [[Double]] {
         return matrix.map { row in
             return columnIndices.map { idx in
+                guard idx >= 0 && idx < row.count else {
+                    fatalError("Column index \(idx) is out of bounds for row: \(row)")
+                }
                 return row[idx]
             }
         }
     }
+
     
     func getDistanceFromPeak(idx: Int, windowRangeStart: Int, medianPeakLocation: Int) -> Int {
         return idx + windowRangeStart - medianPeakLocation

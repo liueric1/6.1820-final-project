@@ -19,10 +19,10 @@ class ViewController: UIViewController {
     }
 
     @IBAction func startRecording(_ sender: Any) {
-        let recordingDuration = 5.0
+        let recordingDuration = 60.0
         
         recording.reset()
-        recording.generateTone(startFrequency: 17000, endFrequency: 23000, chirp_duration: 0.05, total_duration: 5)
+        recording.generateTone(startFrequency: 1000, endFrequency: 23000, chirp_duration: 0.1, total_duration: recordingDuration)
         recording.start()
 
         Timer.scheduledTimer(withTimeInterval: recordingDuration, repeats: false) { [weak self] _ in
